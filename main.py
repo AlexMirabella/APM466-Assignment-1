@@ -16,6 +16,10 @@ DATES = ['1/8/2024', '1/9/2024', '1/10/2024', '1/11/2024', '1/12/2024',
          '1/15/2024', '1/16/2024', '1/17/2024', '1/18/2024', '1/19/2024']
 
 
+def term(j: int, d: datetime.datetime)-> float:
+    return (d - datetime.datetime.strptime(DATES[j], '%m/%d/%Y')).days / 365
+
+
 class Bond:
     isin: str
     issue_date: str
@@ -86,17 +90,20 @@ def date(d: str) -> datetime.datetime:
 
 
 def plot_yield_curve(bonds: list[Bond]):
-    maturities = [b.maturity().strftime('%b \'%y') for b in bonds]
-
+    maturities = [b.maturity() for b in bonds]
 
     for i in range(10):
-        y = [ytm(bonds, j, i) for j, b in enumerate(bonds)]
-        plt.plot(maturities, y, color=(1 - i/10, 0, 0.1 + i/10))
+        terms = [(maturity - datetime.datetime.strptime(DATES[i],
+                                                        '%m/%d/%Y')).days / 365
+                 for maturity in maturities]
+        yields = [ytm(bonds, j, i) for j, b in enumerate(bonds)]
+        # plt.plot(term, yields, color=(1 - i/10, 0.5-i/20, 0.1 + i/10))
+        plt.plot(terms, yields, color='black')
 
     plt.title('Yield Curve', fontsize=18)
-    plt.xlabel('Date', fontsize=15)
+    plt.xlabel('Term (Years)', fontsize=15)
     plt.ylabel('Yield-To-Maturity (%)', fontsize=15)
-    plt.xticks(rotation=30, fontsize=10)
+    plt.xticks(fontsize=10)
     plt.tight_layout()
     plt.show()
 
@@ -134,13 +141,48 @@ def spot_yield(bonds: list[Bond]) -> list[list[float]]:
     """
 
     :param bonds:
-    :return: a list of lists of spot yields for each bond,
-    i.e. first index is the bond (or maturity date), second is the day of data
-    collection
-    i.e. first index is term, second is time
+    :return: a list of lists of spot yields for each day,
+    i.e. first index is time, second is term
     """
+    spot_rates = [[] for _ in range(10)]
+    for i, bond in enumerate(bonds):
+        coupon_pmt = bond.coupon / 2
+        # Use previously calculated spot rates for each day
+        # to calculate discounted cash flows
+        for j in range(10):
+            dirty_price = bond.dirty_price(j)
+            discount = coupon_pmt * \
+                sum([np.exp(-rate * term(j, bonds[k].maturity())) for
+                    k, rate in enumerate(spot_rates[j])])
+            residual = dirty_price - discount
+
+            # Handle cases where residual is too low
+            if residual <= 0:
+                print("Warning: the residual for bond" + str(i+1)
+                      + "for day " + DATES[j] + "is negative. "
+                                                "Adjusting calculation.")
+                spot_rates[j].append(spot_rates[j][i-1])
+            else:
+                spot_rates[j].append(np.log((coupon_pmt + 100)/residual)
+                                     / term(j, bond.maturity()))
+    return spot_rates
 
 
+def plot_spot_curve(bonds: list[Bond]):
+    spot_rates = spot_yield(bonds)
+
+    for j in range(10):
+        terms = [term(j, bonds[i].maturity()) for i in range(10)]
+        spot_rates_per_day = [100*spot_rates[j][i] for i in range(10)]
+        # plt.plot(term, yields, color=(1 - i/10, 0.5-i/20, 0.1 + i/10))
+        plt.plot(terms, spot_rates_per_day, color='black')
+
+    plt.title('Spot Curve', fontsize=18)
+    plt.xlabel('Term (Years)', fontsize=15)
+    plt.ylabel('Spot Rate (%)', fontsize=15)
+    plt.xticks(fontsize=10)
+    plt.tight_layout()
+    plt.show()
 
 
 if __name__ == '__main__':
@@ -154,6 +196,7 @@ if __name__ == '__main__':
 
     # Plotting the curves
     plot_yield_curve(bonds)
+    # plot_spot_curve(bonds)
 
 
 
