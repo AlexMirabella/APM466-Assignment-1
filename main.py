@@ -62,40 +62,12 @@ class Bond:
         return self.prices[t] + accrued_interest
 
 
-def load_data():
+def load_data() -> dict:
     parser: dict = yaml.safe_load(open('data.yaml', 'r'))
     return parser
 
 
-def date(d: str) -> datetime.datetime:
-    return datetime.datetime.strptime(d, '%m/%d/%Y')
-
-
-def plot_yield_curve(bonds: list[Bond]):
-    maturities = [b.maturity().strftime('%b \'%y') for b in bonds]
-    for i in range(10):
-        y = [ytm(b, i) for b in bonds]
-        plt.plot(maturities, y, 'black')
-
-    plt.title('Yield Curve', fontsize=18)
-    plt.xlabel('Date', fontsize=15)
-    plt.ylabel('Yield-To-Maturity (%)', fontsize=15)
-    plt.xticks(rotation=30, fontsize=10)
-    plt.tight_layout()
-    plt.show()
-
-
-def ytm(b: Bond, i: int) -> float:
-    price = b.prices[i]
-    coupon = b.coupon * 100 / 2
-    y = (100 / price)**(1 / (1+i)) - 1
-    return y
-
-
-if __name__ == '__main__':
-
-    # Loading in the bond data from data.yaml
-    bond_data = yaml.safe_load(open('data.yaml', 'r'))
+def load_bonds(bond_data: dict) -> list[Bond]:
     bonds = []
 
     for isin in bond_data.keys():
@@ -106,8 +78,81 @@ if __name__ == '__main__':
         bond.prices = [price for price in bond_data[isin][3]]
         bonds.append(bond)
 
+    return bonds
+
+
+def date(d: str) -> datetime.datetime:
+    return datetime.datetime.strptime(d, '%m/%d/%Y')
+
+
+def plot_yield_curve(bonds: list[Bond]):
+    maturities = [b.maturity().strftime('%b \'%y') for b in bonds]
+
+
+    for i in range(10):
+        y = [ytm(bonds, j, i) for j, b in enumerate(bonds)]
+        plt.plot(maturities, y, color=(1 - i/10, 0, 0.1 + i/10))
+
+    plt.title('Yield Curve', fontsize=18)
+    plt.xlabel('Date', fontsize=15)
+    plt.ylabel('Yield-To-Maturity (%)', fontsize=15)
+    plt.xticks(rotation=30, fontsize=10)
+    plt.tight_layout()
+    plt.show()
+
+
+def ytm(bonds: list[Bond], i: int, j: int) -> float:
+    """
+
+    :param bonds: list of bonds
+    :param i: the index of the bond
+    :param j: the index for the day of data collection
+    :return: the yield-to-maturity of that bond on that day
+    """
+    bond = bonds[i]
+    price = bond.dirty_price(j)
+    coupon_pmt = bond.coupon / 2
+    # Now we solve a polynomial equation for the yield-to-maturity
+    # I made the variable r=(1 + ytm/2) for ease of calculation
+    coeff = [price]
+    for k in range(i):
+        coeff.append(-coupon_pmt)
+    coeff.append(-coupon_pmt - 100)
+    rts = np.roots(coeff)
+    # Find the root that's in the correct range from 1 to 2
+    r = 0
+    for x in rts:
+        if np.imag(x) == 0.0 and 1 <= x <= 2:
+            r = np.real(x)
+    # ytm is calculated from value of r
+    y = 2*(r-1)
+    # yield is returned as a percentage
+    return 100*y
+
+
+def spot_yield(bonds: list[Bond]) -> list[list[float]]:
+    """
+
+    :param bonds:
+    :return: a list of lists of spot yields for each bond,
+    i.e. first index is the bond (or maturity date), second is the day of data
+    collection
+    i.e. first index is term, second is time
+    """
+
+
+
+
+if __name__ == '__main__':
+
+    # Loading in the bond data from data.yaml
+    bond_data = load_data()
+    bonds = load_bonds(bond_data)
+
     # Making sure the bonds are sorted from earliest to latest maturity
     bonds.sort(key=lambda x: x.maturity())
+
+    # Plotting the curves
     plot_yield_curve(bonds)
 
 
