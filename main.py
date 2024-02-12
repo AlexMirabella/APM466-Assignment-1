@@ -155,7 +155,6 @@ def spot_yield(bonds: list[Bond]) -> list[list[float]]:
                 sum([np.exp(-rate * term(j, bonds[k].maturity())) for
                     k, rate in enumerate(spot_rates[j])])
             residual = dirty_price - discount
-
             # Handle cases where residual is too low
             if residual <= 0:
                 print("Warning: the residual for bond" + str(i+1)
@@ -174,12 +173,41 @@ def plot_spot_curve(bonds: list[Bond]):
     for j in range(10):
         terms = [term(j, bonds[i].maturity()) for i in range(10)]
         spot_rates_per_day = [100*spot_rates[j][i] for i in range(10)]
-        # plt.plot(term, yields, color=(1 - i/10, 0.5-i/20, 0.1 + i/10))
-        plt.plot(terms, spot_rates_per_day, color='black')
+        plt.plot(terms, spot_rates_per_day, color=(1 - j/10, 0.5-j/20, 0.1 + j/10))
+        # plt.plot(terms, spot_rates_per_day, color='black')
 
     plt.title('Spot Curve', fontsize=18)
     plt.xlabel('Term (Years)', fontsize=15)
     plt.ylabel('Spot Rate (%)', fontsize=15)
+    plt.xticks(fontsize=10)
+    plt.tight_layout()
+    plt.show()
+
+
+def forward_rates(bonds: list[Bond]):
+    spot_rates = spot_yield(bonds)
+    forward_rates = [[] for _ in range(10)]
+    for j in range(10):
+        for i in range(8):
+            forward_rates[j].append(
+                (spot_rates[j][i+2]*term(j, bonds[i+2].maturity())
+                    - spot_rates[j][1]*term(j, bonds[1].maturity()))
+                / ((bonds[i+1].maturity() - bonds[1].maturity()).days / 365))
+    return forward_rates
+
+
+def plot_forward_curve(bonds: list[Bond]):
+    rates = forward_rates(bonds)
+
+    for j in range(10):
+        terms = ["1yr", "2yr", "3yr", "4yr"]
+        forward_rates_per_day = [100*rates[j][2*i+1] for i in range(4)]
+        # plt.plot(term, yields, color=(1 - i/10, 0.5-i/20, 0.1 + i/10))
+        plt.plot(terms, forward_rates_per_day, color='black')
+
+    plt.title('One Year Forward Curve', fontsize=18)
+    plt.xlabel('Term', fontsize=15)
+    plt.ylabel('Forward Rate (%)', fontsize=15)
     plt.xticks(fontsize=10)
     plt.tight_layout()
     plt.show()
@@ -195,8 +223,10 @@ if __name__ == '__main__':
     bonds.sort(key=lambda x: x.maturity())
 
     # Plotting the curves
-    plot_yield_curve(bonds)
-    # plot_spot_curve(bonds)
+    # plot_yield_curve(bonds)
+    plot_spot_curve(bonds)
+    # plot_forward_curve(bonds)
+
 
 
 
