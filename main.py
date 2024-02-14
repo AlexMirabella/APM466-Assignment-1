@@ -1,22 +1,19 @@
 # This is a sample Python script.
-import numpy
 # Press Shift+F10 to execute it or replace it with your code.
 # Press Double Shift to search everywhere for classes, files, tool windows,
 # actions, and settings.
 
-import yaml
 import datetime
-from dateutil.relativedelta import relativedelta
-from typing import Callable
-import numpy as np
+
 import matplotlib.pyplot as plt
-from matplotlib.figure import Figure
+import numpy as np
+import yaml
 
 DATES = ['1/8/2024', '1/9/2024', '1/10/2024', '1/11/2024', '1/12/2024',
          '1/15/2024', '1/16/2024', '1/17/2024', '1/18/2024', '1/19/2024']
 
 
-def term(j: int, d: datetime.datetime)-> float:
+def term(j: int, d: datetime.datetime) -> float:
     return (d - datetime.datetime.strptime(DATES[j], '%m/%d/%Y')).days / 365
 
 
@@ -27,7 +24,8 @@ class Bond:
     coupon: float
     prices: list[float]
 
-    def __init__(self, isin: str, issue_date: str, maturity_date: str, coupon: float):
+    def __init__(self, isin: str, issue_date: str, maturity_date: str,
+                 coupon: float):
         self.isin = isin
         self.issue_date = issue_date
         self.maturity_date = maturity_date
@@ -132,9 +130,17 @@ def ytm(bonds: list[Bond], i: int, j: int) -> float:
         if np.imag(x) == 0.0 and 1 <= x <= 2:
             r = np.real(x)
     # ytm is calculated from value of r
-    y = 2*(r-1)
+    y = 2 * (r - 1)
     # yield is returned as a percentage
-    return 100*y
+    return 100 * y
+
+
+def yield_log_return(bonds: list[Bond]):
+    ylr = [[] for _ in range(5)]
+    for i in range(5):
+        for j in range(9):
+            ylr[i].append(np.log(ytm(bonds, i, j + 1) / ytm(bonds, i, j)))
+    return ylr
 
 
 def spot_yield(bonds: list[Bond]) -> list[list[float]]:
@@ -152,17 +158,17 @@ def spot_yield(bonds: list[Bond]) -> list[list[float]]:
         for j in range(10):
             dirty_price = bond.dirty_price(j)
             discount = coupon_pmt * \
-                sum([np.exp(-rate * term(j, bonds[k].maturity())) for
-                    k, rate in enumerate(spot_rates[j])])
+                       sum([np.exp(-rate * term(j, bonds[k].maturity())) for
+                            k, rate in enumerate(spot_rates[j])])
             residual = dirty_price - discount
             # Handle cases where residual is too low
             if residual <= 0:
-                print("Warning: the residual for bond" + str(i+1)
+                print("Warning: the residual for bond" + str(i + 1)
                       + "for day " + DATES[j] + "is negative. "
                                                 "Adjusting calculation.")
-                spot_rates[j].append(spot_rates[j][i-1])
+                spot_rates[j].append(spot_rates[j][i - 1])
             else:
-                spot_rates[j].append(np.log((coupon_pmt + 100)/residual)
+                spot_rates[j].append(np.log((coupon_pmt + 100) / residual)
                                      / term(j, bond.maturity()))
     return spot_rates
 
@@ -172,8 +178,9 @@ def plot_spot_curve(bonds: list[Bond]):
 
     for j in range(10):
         terms = [term(j, bonds[i].maturity()) for i in range(10)]
-        spot_rates_per_day = [100*spot_rates[j][i] for i in range(10)]
-        plt.plot(terms, spot_rates_per_day, color=(1 - j/10, 0.5-j/20, 0.1 + j/10))
+        spot_rates_per_day = [100 * spot_rates[j][i] for i in range(10)]
+        plt.plot(terms, spot_rates_per_day,
+                 color=(1 - j / 10, 0.5 - j / 20, 0.1 + j / 10))
         # plt.plot(terms, spot_rates_per_day, color='black')
 
     plt.title('Spot Curve', fontsize=18)
@@ -190,10 +197,20 @@ def forward_rates(bonds: list[Bond]):
     for j in range(10):
         for i in range(8):
             forward_rates[j].append(
-                (spot_rates[j][i+2]*term(j, bonds[i+2].maturity())
-                    - spot_rates[j][1]*term(j, bonds[1].maturity()))
-                / ((bonds[i+1].maturity() - bonds[1].maturity()).days / 365))
+                (spot_rates[j][i + 2] * term(j, bonds[i + 2].maturity())
+                 - spot_rates[j][1] * term(j, bonds[1].maturity()))
+                / ((bonds[i + 1].maturity() - bonds[1].maturity()).days / 365))
     return forward_rates
+
+
+def forward_log_return(bonds: list[Bond]):
+    forwards = forward_rates(bonds)
+    flr = [[] for _ in range(4)]
+    for i in range(4):
+        for j in range(9):
+            flr[i].append(
+                np.log(forwards[j + 1][2 * i + 1] / forwards[j][2 * i + 1]))
+    return flr
 
 
 def plot_forward_curve(bonds: list[Bond]):
@@ -201,7 +218,7 @@ def plot_forward_curve(bonds: list[Bond]):
 
     for j in range(10):
         terms = ["1yr", "2yr", "3yr", "4yr"]
-        forward_rates_per_day = [100*rates[j][2*i+1] for i in range(4)]
+        forward_rates_per_day = [100 * rates[j][2 * i + 1] for i in range(4)]
         # plt.plot(term, yields, color=(1 - i/10, 0.5-i/20, 0.1 + i/10))
         plt.plot(terms, forward_rates_per_day, color='black')
 
@@ -213,6 +230,10 @@ def plot_forward_curve(bonds: list[Bond]):
     plt.show()
 
 
+def covariance_matrix(time_series: list[list[float]]) -> np.array:
+    return np.cov(time_series)
+
+
 if __name__ == '__main__':
 
     # Loading in the bond data from data.yaml
@@ -222,12 +243,18 @@ if __name__ == '__main__':
     # Making sure the bonds are sorted from earliest to latest maturity
     bonds.sort(key=lambda x: x.maturity())
 
-    # Plotting the curves
+    # --- Curve Plots ---
     # plot_yield_curve(bonds)
-    plot_spot_curve(bonds)
+    # plot_spot_curve(bonds)
     # plot_forward_curve(bonds)
 
+    # --- Covariance Matrices ---
+    yield_log_covariance = covariance_matrix(yield_log_return(bonds))
+    forward_log_covariance = covariance_matrix(forward_log_return(bonds))
 
+    # print(yield_log_covariance)
+    # print(forward_log_covariance)
 
-
-
+    # --- Eigenvalues and Eigenvectors ---
+    print(np.linalg.eig(yield_log_covariance))
+    # print(np.linalg.eig(forward_log_covariance))
