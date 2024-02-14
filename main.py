@@ -257,4 +257,4 @@ if __name__ == '__main__':
 
     # --- Eigenvalues and Eigenvectors ---
     print(np.linalg.eig(yield_log_covariance))
-    # print(np.linalg.eig(forward_log_covariance))
+    print(np.linalg.eig(forward_log_covariance))
